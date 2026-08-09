@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  chroma:
+    image: ghcr.io/chroma-core/chroma:latest
+    user: root
+    environment:
+      - IS_PERSISTENT=TRUE
+      - PERSIST_DIRECTORY=/chroma/chroma
+      - ALLOW_RESET=TRUE
+    volumes:
+      # Official persistent mount path expected by the container entrypoint
+      - index_data:/chroma/chroma
+    ports:
+      - "8000:8000"
+    networks:
+      - net
+
+volumes:
+  index_data:
+    driver: local
+
+networks:
+  net:
+    driver: bridge
