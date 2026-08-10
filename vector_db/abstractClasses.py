@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class VectorItem:
     """Data Transformation Object for vectore db input and querying"""
-    id: str
+    id: Optional[str] = None 
     embedding: Optional[List[float]] = field(default_factory=list) 
     document: Optional[str] = None 
     metadata: Dict[str, Any] = field(default_factory=dict)

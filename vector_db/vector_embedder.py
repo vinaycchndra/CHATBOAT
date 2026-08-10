@@ -8,5 +8,5 @@ class VectorHuggingFaceEmbeddingModel:
     @classmethod
     def getVectorEmbedder(cls) -> Embeddings:
         if cls._instance is None:
-            cls._instance = HuggingFaceEmbeddings(model_name="sentence-transformers/all-mpnet-base-v2")
+            cls._instance = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         return cls._instance

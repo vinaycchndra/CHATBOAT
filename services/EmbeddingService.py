@@ -12,6 +12,30 @@ logger = logging.getLogger(__name__)
 
 class VectorEmbeddingService:
 
+
+    @classmethod 
+    async def __embedAndAddToVectorDb(cls, textChunkList: List[str], metaDataList: List[str]): 
+        vectorEmbedder = VectorHuggingFaceEmbeddingModel.getVectorEmbedder()
+        vectorDb = await CromadbVectorDB.getVectorDb()
+        # create vector embeddings 
+        try: 
+            embeddings = await vectorEmbedder.aembed_documents(textChunkList)
+        except Exception as e: 
+            logger.exception(e)
+
+        # Creating vector items
+        vectorItems = []
+        for i in range(len(textChunkList)): 
+            vectorItems.append(VectorItem(id=str(uuid.uuid4()), embedding=embeddings[i], document=textChunkList[i], metadata=metaDataList[i]))
+
+        # Add data to the vector db
+        try:
+            if len(vectorItems) > 0:
+                await vectorDb.add(vectorItems)
+                print(f"added {len(vectorItems)} items...")
+        except Exception as e: 
+            logger.exception(e)
+
     @classmethod 
     async def createEmbeddingForFile(cls, fileType: str, filePath: str, userId: int, documentId: int): 
         """
@@ -28,15 +52,15 @@ class VectorEmbeddingService:
 
         file_parser_generator = file_parser_object.extract_docs()
 
-
-        vectorEmbedder = VectorHuggingFaceEmbeddingModel.getVectorEmbedder()
-        vectorDb = await CromadbVectorDB.getVectorDb()  
         textSplitter = RecursiveCharacterTextSplitter(
             chunk_size=400,
             chunk_overlap = 50,
             length_function = len,
             separators=["\n\n", "\n", " ", ""]
             )
+
+        chunkTextList = []
+        chunkMetaData = []
 
         # get the document, get updated metadata... 
         async for document in file_parser_generator:
@@ -56,8 +80,7 @@ class VectorEmbeddingService:
             # splitting the page into the chunks...
             document.metadata = metadata
             listDocuments = textSplitter.split_documents([document])
-            chunkTextList = []
-            chunkMetaData = []
+            
             for doc in listDocuments:
                 
                 if doc.page_content: 
@@ -66,24 +89,13 @@ class VectorEmbeddingService:
                     chunkMetaData.append(doc.metadata)
 
 
-            # create vector embeddings 
-            try: 
-                embeddings = await vectorEmbedder.aembed_documents(chunkTextList)
-            except Exception as e: 
-                logger.exception(e)
-                continue 
+            if len(chunkTextList) >= 200:
+                await cls.__embedAndAddToVectorDb(chunkTextList, chunkMetaData)
+                chunkTextList.clear()
+                chunkMetaData.clear()
 
-            # Creating vector items
-            vectorItems = []
-            for i in range(len(chunkTextList)): 
-                vectorItems.append(VectorItem(id=str(uuid.uuid4()), embedding=embeddings[i], document=chunkTextList[i], metadata=chunkMetaData[i]))
-
-            # Add data to the vector db
-            try:
-                if len(vectorItems) > 0:
-                    await vectorDb.add(vectorItems)
-            except Exception as e: 
-                logger.exception(e)
+        if len(chunkTextList) > 0:
+            await cls.__embedAndAddToVectorDb(chunkTextList, chunkMetaData)
 
     @classmethod
     async def QueryVectorDb(cls, user_id: int, text: str, top_n: int) -> List[Dict[str, Any]]: 

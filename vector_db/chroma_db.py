@@ -1,8 +1,9 @@
 import logging
 from typing import List
 from chromadb import AsyncHttpClient
-from vector_db.abstractClasses import VectorDBAbstract, VectorItem
 from vector_db.constants import VECTOR_DB_COLLECTION, VECTOR_DB_HOST, VECTOR_DB_PORT
+from vector_db.abstractClasses import VectorDBAbstract, VectorItem
+
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +14,7 @@ class CromadbVectorDB(VectorDBAbstract):
     @classmethod
     async def getVectorDb(cls) -> VectorDBAbstract: 
         if cls._instance is None:
-            client = AsyncHttpClient(host=VECTOR_DB_HOST, port=VECTOR_DB_PORT) 
+            client = await AsyncHttpClient(host=VECTOR_DB_HOST, port=int(VECTOR_DB_PORT)) 
             collection_instance = await client.get_or_create_collection(name=VECTOR_DB_COLLECTION)
             cls._instance = cls()
             cls._instance.client = client
