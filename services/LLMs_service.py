@@ -105,7 +105,7 @@ class GeminiLLM:
         if existingSummary is None or existingSummary == "": 
             promptTemplate = """You are ai assistant who summarises the sequence of chat into an overall discussion summary between the ai agent and a human.  Please summarise under 200 words. Here is conversation between human and ai\n{lastNChats}."""
         else:
-            promptTemplate = """You are ai assistant who updated the existing conversation summary with the existing chat sequence between ai and human. Please summarise under 200 words. Here is existing summary:\n {previousSummary} and current sequence of chat between the ai agent and a human is \n{lastNChats}. Please summarise under 200 words."""
+            promptTemplate = """You are ai assistant who updated the existing conversation summary with the existing chat sequence between ai and human. Please summarise under 200 words. Here is existing summary:\n {previousSummary} and current sequence of chat between the ai agent and a human is \n{lastNChats}"""
             template_input["previousSummary"] = existingSummary
 
         # # create the overall prompt 
