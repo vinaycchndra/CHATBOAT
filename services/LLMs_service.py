@@ -118,8 +118,7 @@ class GeminiLLM:
             logger.exception(e)
             raise Exception("Prompt could not be created.")
 
-        try: 
-            print(res)
+        try:
             llm = cls.__getLLM()
         except Exception as e: 
             logger.exception(e)
