@@ -1,12 +1,14 @@
 from fastapi import FastAPI, APIRouter, Request, Depends
 from core.middleware import AuthMiddleware
-from api.v1.endpoints.users_endpoints import router
+from api.v1.endpoints.users_endpoints import user_router
+from api.v1.endpoints.chat_session_endpoints import chat_session_router
 from dotenv import load_dotenv
 from db.mongodb import initDb
 import asyncio
 
 app = FastAPI()
-app.include_router(router)
+app.include_router(user_router)
+app.include_router(chat_session_router)
 
 
 @app.on_event("startup")

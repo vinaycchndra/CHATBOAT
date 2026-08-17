@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from services.userService import UserService 
-from api.v1.schemas.user_models import UserLogin, UserRegister
+from api.v1.schemas.models import UserLogin, UserRegister
 from core.exceptions import EntityDoesNotExist, InvalidInputError
 
-router = APIRouter(
+user_router = APIRouter(
     prefix="/v1/users",
     tags=["users"],
     responses={404: {"description": "Not found"}},
 )
 
-@router.post("/login/", tags=["login"])
+@user_router.post("/login/", tags=["login"])
 async def login_user(payload: UserLogin, request: Request): 
     try:
         user_detail = await UserService.login_user(email=payload.email, password=payload.password)
@@ -21,7 +21,7 @@ async def login_user(payload: UserLogin, request: Request):
     return JSONResponse(status_code=201, content=user_detail)
 
 
-@router.post("/register/", tags=["register"])
+@user_router.post("/register/", tags=["register"])
 async def login_user(payload: UserRegister): 
     try:
         user_detail = await UserService.register_user(name=payload.name, email=payload.email, password=payload.password)
