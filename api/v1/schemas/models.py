@@ -1,5 +1,6 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+from enum import Enum
 
 # User Model
 class UserLogin(BaseModel): 
@@ -21,5 +22,14 @@ class ChatSessionModel(BaseModel):
     user_id: Optional[str]                      = None 
     archived: Optional[bool]                    = None
 
+# Chat message roles 
+class ChatModelRoles(Enum): 
+    AI = "ai"
+    HUMAN = "human"
 
-
+# Chat Message Model
+class MessageModel(BaseModel): 
+    role: Optional[ChatModelRoles] = None 
+    message_text: str 
+    is_summarized: Optional[bool] = None
+    

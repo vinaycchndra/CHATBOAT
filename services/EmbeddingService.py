@@ -6,12 +6,9 @@ from vector_db.abstractClasses import VectorItem
 from vector_db.vector_embedder import VectorHuggingFaceEmbeddingModel
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-
 logger = logging.getLogger(__name__)
 
-
 class VectorEmbeddingService:
-
 
     @classmethod 
     async def __embedAndAddToVectorDb(cls, textChunkList: List[str], metaDataList: List[str]): 
@@ -32,7 +29,6 @@ class VectorEmbeddingService:
         try:
             if len(vectorItems) > 0:
                 await vectorDb.add(vectorItems)
-                print(f"added {len(vectorItems)} items...")
         except Exception as e: 
             logger.exception(e)
 

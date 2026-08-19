@@ -1,8 +1,9 @@
-from dataAccessLayer.chat_dal import ChatSessionOdmLayer 
+from dataAccessLayer.chat_dal import ChatSessionOdmLayer, ChatMessageOdmLayer
 from dataAccessLayer.userDal import UserOdmLayer
 from core.exceptions import EntityDoesNotExist, UnAuthorizedAccess, NothingToUpdate
 from typing import Dict, List, Any
 from dateutil import parser
+from models.chatModels import ChatRoles
 
 
 class ChatSessionService: 
@@ -107,3 +108,92 @@ class ChatSessionService:
             res.append(session_obj)
 
         return res
+
+class ChatMessageService: 
+
+    @classmethod
+    async def create_messasge(cls, session_id: str, role: str, message_text: str) -> Dict: 
+        """
+            session_id(str): session to which message belongs
+            role(str): either "ai" or "human"
+            message_text(str): text
+        """
+
+        if role not in ["ai", "human"]:
+            raise ValueError("Only two roles are possible.")
+
+        if not message_text: 
+            raise ValueError("Message can not be empty")
+
+        message = await ChatMessageOdmLayer.create_message(session_id=session_id, role=role, message_text=message_text)
+
+        # session_detail = message.sessionId.to_dict()
+        # from_db_session_id = session_detail.get("id") 
+        from_db_session_id =  message.sessionId.id 
+        message_dict = {
+            "session_id": from_db_session_id, 
+            "role": message.role, 
+            "message": message.messageText, 
+            "is_summarized": message.isSummarized, 
+            "created_at": str(message.created_at),
+            "updated_at": str(message.updated_at)
+        }
+
+        return message_dict
+
+    @classmethod
+    async def query_message(cls, 
+                            session_id: str, 
+                            is_summarized: bool = None,
+                            role: str = None, 
+                            created_at: str = None, 
+                            updated_at: str = None, 
+                            limit: int = None, 
+                            offset: int = None
+                        ) -> List[Dict]: 
+
+        query = {"session_id": session_id}
+
+        if created_at: 
+            query["created_at"] = parser.parse(created_at, tzinfos={"tzname": "UTC"})
+
+        if updated_at: 
+            query["updated_at"] = parser.parse(updated_at, tzinfos={"tzname": "UTC"})
+
+        if is_summarized is not None: 
+            query["is_summarized"] = is_summarized
+
+        if role is not None: 
+            if role not in ["ai", "human"]: 
+                raise ValueError("Only two types of roles are possible either ai or human.")
+
+            if role == ChatRoles.AI:
+                query["role"] = ChatRoles.AI
+            elif role == ChatRoles.HUMAN:
+                query["role"] = ChatRoles.HUMAN 
+
+        if limit is not None: 
+            query["limit"] = limit
+
+        if offset is not None: 
+            query["offset"] = offset
+
+        messages = await ChatMessageOdmLayer.query_message(**query)    
+
+        res = []
+
+        for message in messages: 
+            # session_detail = message.sessionId.to_dict()
+            from_db_session_id =  message.sessionId.id  #session_detail.get("id") 
+
+            message_dict = {
+                "session_id": from_db_session_id, 
+                "role": message.role, 
+                "message": message.messageText, 
+                "is_summarized": message.isSummarized, 
+                "created_at": str(message.created_at),
+                "updated_at": str(message.updated_at)
+            }
+
+            res.append(message_dict)
+        return res 

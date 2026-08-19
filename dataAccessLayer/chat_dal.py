@@ -1,5 +1,5 @@
 import logging
-from models.chatModels import ChatSession
+from models.chatModels import ChatSession, ChatMessage, ChatRoles
 from models.user import User
 from uuid import UUID
 from core.exceptions import EntityDoesNotExist
@@ -93,3 +93,69 @@ class ChatSessionOdmLayer:
             logger.exception(f"Something happend while fetching session and updating it.")
             raise e
         return chat_session
+
+
+class ChatMessageOdmLayer:
+
+    @classmethod
+    async def create_message(cls, session_id: str, role: ChatRoles, message_text: str)->ChatMessage:         
+        chat_session = await ChatSession.find_one({"_id": UUID(hex=session_id)})
+
+        if not chat_session:  
+            raise EntityDoesNotExist(f"session: {session_id} does not exist.")
+
+        try:
+            chat_message = ChatMessage(sessionId=chat_session, role=role, messageText=message_text)
+            await chat_message.save()
+        except Exception: 
+            logger.exception("Something happened while saving message to the db.")
+            raise
+        return chat_message
+
+    @classmethod
+    async def query_message(    cls, 
+                                session_id: str, 
+                                is_summarized: bool = None, 
+                                role: ChatRoles = None, 
+                                created_at: datetime = None, 
+                                updated_at: datetime = None, 
+                                limit: int = None, 
+                                offset: int = None
+                            ) -> List[ChatMessage]:
+
+        chat_session = await ChatSession.find_one({"_id": UUID(hex=session_id)})
+
+        if not chat_session:  
+            raise EntityDoesNotExist(f"session: {session_id} does not exist.")
+
+        query = {"sessionId": chat_session.id}
+
+        if is_summarized is not None: 
+            query["isSummarized"] = is_summarized
+
+        if role is not None: 
+            if not isinstance(role, ChatRoles):
+                raise ValueError(f"Invalid role: {role}. Must be a ChatRoles enum.")
+            query["role"] = role
+
+        if created_at: 
+            query["created_at"] = {"$gte": created_at}
+
+        if updated_at: 
+            query["updated_at"] = {"$gte": updated_at}
+
+        query_odm =  ChatMessage.find_many(query) 
+
+        if offset is not None: 
+            query_odm  = query_odm.skip(offset)
+
+        if limit is not None: 
+            query_odm = query_odm.limit(limit)
+
+        try:
+            chat_messages = await query_odm.sort("-created_at").to_list(None) 
+        except Exception: 
+            logger.exception("Something happend while querying chat messages.")
+            raise
+        return chat_messages   
+
