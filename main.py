@@ -14,7 +14,7 @@ app.include_router(chat_message_router)
 
 @app.on_event("startup")
 async def startup_event():
-    await VectorEmbeddingService.createEmbeddingForFile(fileType="application/pdf", filePath="/home/vishal/Desktop/ChatBoat/data/Medical_book.pdf", userId="6a82b8324124d6a72005d3e2", documentId="my_document")
+    # await VectorEmbeddingService.createEmbeddingForFile(fileType="application/pdf", filePath="/home/vishal/Desktop/ChatBoat/data/Medical_book.pdf", userId="6a82b8324124d6a72005d3e2", documentId="my_document")
     load_dotenv()
     await initDb()
         

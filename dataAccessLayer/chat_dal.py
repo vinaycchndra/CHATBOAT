@@ -1,4 +1,5 @@
 import logging
+from bson.dbref import DBRef
 from models.chatModels import ChatSession, ChatMessage, ChatRoles
 from models.user import User
 from uuid import UUID
@@ -128,7 +129,8 @@ class ChatMessageOdmLayer:
         if not chat_session:  
             raise EntityDoesNotExist(f"session: {session_id} does not exist.")
 
-        query = {"sessionId": chat_session.id}
+        query = {}
+        query_odm =  ChatMessage.find(ChatMessage.sessionId.id == chat_session.id, fetch_links=True) 
 
         if is_summarized is not None: 
             query["isSummarized"] = is_summarized
@@ -144,7 +146,8 @@ class ChatMessageOdmLayer:
         if updated_at: 
             query["updated_at"] = {"$gte": updated_at}
 
-        query_odm =  ChatMessage.find_many(query) 
+        if len(query) > 0:
+            query_odm =  query_odm.find(query, fetch_links=True) 
 
         if offset is not None: 
             query_odm  = query_odm.skip(offset)
@@ -156,6 +159,15 @@ class ChatMessageOdmLayer:
             chat_messages = await query_odm.sort("-created_at").to_list(None) 
         except Exception: 
             logger.exception("Something happend while querying chat messages.")
-            raise
+           
         return chat_messages   
 
+    @classmethod
+    async def update_messages_status(cls, message_ids: List[str], is_summarized: bool) ->List[ChatMessage]: 
+        try:
+            if message_ids and len(message_ids) > 0:
+                message_ids_list = [PydanticObjectId(message_id) for message_id in message_ids]  
+                await ChatMessage.find({"_id": {"$in": message_ids_list}}).update_many({"$set": {"isSummarized": is_summarized}})
+        except Exception: 
+            logger.exception("Something happened while updating the message summary.")
+            raise 

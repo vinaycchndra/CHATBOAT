@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
 from services.EmbeddingService import VectorEmbeddingService
 from api.v1.schemas.models import MessageModel
@@ -14,7 +14,7 @@ chat_message_router = APIRouter(
 )
 
 @chat_message_router.post("/{session_id}/send", tags=["send_message"])
-async def create_session(request: Request, payload: MessageModel, session_id: str): 
+async def create_session(request: Request, payload: MessageModel, session_id: str, background_tasks: BackgroundTasks): 
     try: 
         user_id = request.state.user_id
 
@@ -41,10 +41,11 @@ async def create_session(request: Request, payload: MessageModel, session_id: st
         for previous_message in previous_messages: 
             previous_messages_list.append((previous_message.get("role"), previous_message.get("message"))) 
 
+        print(previous_messages)
+
         # check their count if more than the specified call the summarisation background process.
         if len(previous_messages) > 5: 
-            # call the back ground summarisation
-            pass 
+            background_tasks.add_task(ChatMessageService.summarize_messages, session_id, user_id)
 
         # input the ai model and get the response 
         ai_response = await GeminiLLM.sendMessageToLLM(userQuestion=human_message, context=input_context, chatSummary=session_summary, lastNChats=previous_messages_list)

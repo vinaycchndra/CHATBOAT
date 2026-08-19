@@ -22,7 +22,7 @@ async def login_user(payload: UserLogin, request: Request):
 
 
 @user_router.post("/register/", tags=["register"])
-async def login_user(payload: UserRegister): 
+async def register_user(payload: UserRegister): 
     try:
         user_detail = await UserService.register_user(name=payload.name, email=payload.email, password=payload.password)
     except Exception as e: 

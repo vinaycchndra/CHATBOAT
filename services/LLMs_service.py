@@ -68,7 +68,7 @@ class GeminiLLM:
         except Exception as e: 
             logger.exception(e)
             raise Exception("Prompt could not be created.")
-
+        print("\n\n\n\n", res, "\n\n\n\n")
         try: 
             llm = cls.__getLLM()
         except Exception as e: 
@@ -94,7 +94,6 @@ class GeminiLLM:
                                                             ]
                 
             """
-
         if (lastNChats is None or not lastNChats):
             raise Exception("last N chats can not be empty...")
 

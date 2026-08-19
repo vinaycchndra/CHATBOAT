@@ -1,11 +1,13 @@
+import logging
 from dataAccessLayer.chat_dal import ChatSessionOdmLayer, ChatMessageOdmLayer
 from dataAccessLayer.userDal import UserOdmLayer
 from core.exceptions import EntityDoesNotExist, UnAuthorizedAccess, NothingToUpdate
 from typing import Dict, List, Any
 from dateutil import parser
 from models.chatModels import ChatRoles
+from services.LLMs_service import GeminiLLM
 
-
+logger = logging.getLogger("__name__")
 class ChatSessionService: 
 
     @staticmethod
@@ -183,10 +185,10 @@ class ChatMessageService:
         res = []
 
         for message in messages: 
-            # session_detail = message.sessionId.to_dict()
             from_db_session_id =  message.sessionId.id  #session_detail.get("id") 
 
             message_dict = {
+                "id": message.id, 
                 "session_id": from_db_session_id, 
                 "role": message.role, 
                 "message": message.messageText, 
@@ -196,4 +198,52 @@ class ChatMessageService:
             }
 
             res.append(message_dict)
+
         return res 
+
+
+    @classmethod
+    async def summarize_messages(cls, session_id: str, user_id: str) -> bool: 
+        try:
+            # querying the non summarized messages.
+            chat_messages = await cls.query_message(session_id=session_id, is_summarized=False)
+            res = []
+            message_ids = []
+            for i in range(len(chat_messages)-1, -1, -1): 
+                chat_message = chat_messages[i]
+                res.append((chat_message.get("role").value, chat_message.get("message")))
+                message_ids.append(chat_message.get("id"))
+            print(message_ids, res, "\n\nthis is the message\n")
+            # Query the session summary
+            session_object = await ChatSessionService.get_chat_session(session_id=session_id, user_id=user_id)
+            session_summary = session_object.get("session_summary")
+
+            if len(res) == 0:
+                return False 
+            
+            updated_session_summary = await GeminiLLM.summariseWithExistingSummary(existingSummary=session_summary, lastNChats=res)
+
+            # update the session summary and update the summarized flag.
+            await ChatSessionService.update_chat_session(session_id=session_id, user_id=user_id, session_summary=updated_session_summary)            
+
+            # update the summarized flag of the chat messages
+            await ChatMessageOdmLayer.update_messages_status(message_ids=message_ids, is_summarized=True)
+
+        except Exception:
+            logger.exception(f"Something happened while summarizing the messages for the session_id: {session_id}")    
+        
+
+
+
+
+
+
+
+
+
+        # "session_id": from_db_session_id, 
+        #                 "role": message.role, 
+        #                 "message": message.messageText, 
+        #                 "is_summarized": message.isSummarized, 
+        #                 "created_at": str(message.created_at),
+        #                 "updated_at": str(message.updated_at)
