@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 
 const API_BASE = 'http://127.0.0.1:8001'
@@ -84,6 +84,38 @@ const stats = [
   { value: 'RAG', label: 'retrieval flow' },
 ]
 
+const MESSAGE_PAGE_SIZE = 10
+
+const renderInlineMarkdown = (text) => {
+  const pattern = /(\*\*[^*]+\*\*|\*[^*]+\*|_[^_]+_)/g
+  const parts = []
+  let lastIndex = 0
+  let match
+
+  while ((match = pattern.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(<span key={`plain-${lastIndex}`}>{text.slice(lastIndex, match.index)}</span>)
+    }
+
+    const matchedText = match[0]
+    const innerText = matchedText.replace(/^\*\*|\*\*$|^\*|\*$|^_|_$/g, '')
+
+    if (matchedText.startsWith('**')) {
+      parts.push(<strong key={`strong-${match.index}`}>{innerText}</strong>)
+    } else {
+      parts.push(<em key={`em-${match.index}`}>{innerText}</em>)
+    }
+
+    lastIndex = match.index + matchedText.length
+  }
+
+  if (lastIndex < text.length) {
+    parts.push(<span key={`plain-end-${lastIndex}`}>{text.slice(lastIndex)}</span>)
+  }
+
+  return parts.length > 0 ? parts : text
+}
+
 const formatMessageText = (text) => {
   if (!text) {
     return []
@@ -103,15 +135,24 @@ const formatMessageText = (text) => {
       return <div key={`empty-${index}`} className="message-line empty" />
     }
 
-    if (/^[-*]\s+/.test(trimmed)) {
+    if (/^###\s+/.test(trimmed)) {
       return (
-        <div key={`line-${index}`} className="message-line bullet">
-          {trimmed.replace(/^[-*]\s+/, '')}
+        <div key={`line-${index}`} className="message-line heading heading-3">
+          {renderInlineMarkdown(trimmed.replace(/^###\s+/, ''))}
         </div>
       )
     }
 
-    return <div key={`line-${index}`} className="message-line">{line}</div>
+    if (/^[-*]\s+/.test(trimmed)) {
+      const bulletContent = trimmed.replace(/^[-*]\s+/, '')
+      return (
+        <div key={`line-${index}`} className="message-line bullet">
+          {renderInlineMarkdown(bulletContent)}
+        </div>
+      )
+    }
+
+    return <div key={`line-${index}`} className="message-line">{renderInlineMarkdown(line)}</div>
   })
 }
 
@@ -123,14 +164,30 @@ function App() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [sessions, setSessions] = useState([])
-  const [messagesBySession, setMessagesBySession] = useState(initialMessages)
+  const [messagesBySession, setMessagesBySession] = useState({})
   const [activeSessionId, setActiveSessionId] = useState('')
   const [draft, setDraft] = useState('')
   const [isLoadingSessions, setIsLoadingSessions] = useState(false)
   const [isAiThinking, setIsAiThinking] = useState(false)
+  const [sessionMessageOffsets, setSessionMessageOffsets] = useState({})
+  const [isLoadingMessages, setIsLoadingMessages] = useState({})
+  const messagesListRef = useRef(null)
+  const textareaRef = useRef(null)
 
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) || sessions[0] || null
   const activeMessages = activeSession ? messagesBySession[activeSessionId] || [] : []
+
+  const scrollToBottom = (behavior = 'auto') => {
+    const container = messagesListRef.current
+    if (!container) {
+      return
+    }
+
+    container.scrollTo({
+      top: container.scrollHeight,
+      behavior,
+    })
+  }
 
   const loadSessions = async () => {
     if (!sessionUser) {
@@ -170,6 +227,133 @@ function App() {
       setActiveSessionId('')
     }
   }, [sessionUser])
+
+  const fetchSessionMessages = async (sessionId, append = false) => {
+    if (!sessionId) {
+      return
+    }
+
+    const currentOffset = append ? (sessionMessageOffsets[sessionId] ?? 0) : 0
+
+    setIsLoadingMessages((prev) => ({ ...prev, [sessionId]: true }))
+
+    try {
+      const response = await requestWithAuth(
+        `/v1/chat-message/${sessionId}/messages?limit=${MESSAGE_PAGE_SIZE}&offset=${currentOffset}`,
+        { method: 'GET' },
+      )
+
+      const nextMessages = Array.isArray(response) ? response : []
+
+      if (!nextMessages.length) {
+        return
+      }
+
+      const normalizedMessages = nextMessages
+        .map((message) => ({
+          id: message.id,
+          sender: message.role === 'human' ? 'user' : 'bot',
+          text: message.message,
+          time: message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Just now',
+          createdAt: message.created_at,
+        }))
+        .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+
+      setMessagesBySession((prev) => {
+        const existingMessages = prev[sessionId] || []
+        const mergedMessages = append
+          ? [...normalizedMessages, ...existingMessages].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+          : normalizedMessages
+
+        return {
+          ...prev,
+          [sessionId]: mergedMessages,
+        }
+      })
+
+      setSessionMessageOffsets((prev) => ({
+        ...prev,
+        [sessionId]: (prev[sessionId] ?? 0) + nextMessages.length,
+      }))
+    } catch (fetchError) {
+      console.error('Failed to load session messages:', fetchError)
+    } finally {
+      setIsLoadingMessages((prev) => ({ ...prev, [sessionId]: false }))
+    }
+  }
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      return
+    }
+
+    const existingMessages = messagesBySession[activeSessionId]
+    if (!existingMessages || existingMessages.length === 0) {
+      fetchSessionMessages(activeSessionId, false)
+    }
+  }, [activeSessionId, messagesBySession])
+
+  const handleMessagesScroll = async () => {
+    const container = messagesListRef.current
+    if (!container || !activeSessionId) {
+      return
+    }
+
+    const isNearTop = container.scrollTop <= 80
+    const offset = sessionMessageOffsets[activeSessionId] ?? 0
+    const isBusy = isLoadingMessages[activeSessionId]
+
+    if (isNearTop && offset > 0 && !isBusy) {
+      const previousScrollHeight = container.scrollHeight
+      const previousScrollTop = container.scrollTop
+
+      await fetchSessionMessages(activeSessionId, true)
+
+      requestAnimationFrame(() => {
+        const nextContainer = messagesListRef.current
+        if (!nextContainer) {
+          return
+        }
+
+        nextContainer.scrollTop = nextContainer.scrollHeight - previousScrollHeight + previousScrollTop
+      })
+    }
+  }
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      return
+    }
+
+    const container = messagesListRef.current
+    if (!container) {
+      return
+    }
+
+    const isNearBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 120
+
+    if (isNearBottom) {
+      requestAnimationFrame(() => scrollToBottom('auto'))
+    }
+  }, [activeMessages, activeSessionId, isAiThinking])
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      return
+    }
+
+    requestAnimationFrame(() => scrollToBottom('auto'))
+  }, [activeSessionId])
+
+  useEffect(() => {
+    if (!textareaRef.current) {
+      return
+    }
+
+    if (!isAiThinking) {
+      textareaRef.current.focus()
+    }
+  }, [activeSessionId, isAiThinking, activeMessages.length])
 
   const openAuthModal = (mode) => {
     setAuthMode(mode)
@@ -259,10 +443,12 @@ function App() {
 
       setSessions((prev) => [newSession, ...prev])
       setActiveSessionId(newSession.session_id)
+      setSessionMessageOffsets((prev) => ({ ...prev, [newSession.session_id]: 0 }))
       setMessagesBySession((prev) => ({
         ...prev,
-        [newSession.session_id]: prev[newSession.session_id] || [],
+        [newSession.session_id]: [],
       }))
+      fetchSessionMessages(newSession.session_id, false)
     } catch (createError) {
       console.error('Failed to create a new session:', createError)
     }
@@ -304,6 +490,10 @@ function App() {
 
     setDraft('')
     setIsAiThinking(true)
+    requestAnimationFrame(() => {
+      scrollToBottom('smooth')
+      textareaRef.current?.focus()
+    })
 
     try {
       const botReply = await sendMessageToBackend(activeSessionId, trimmedMessage)
@@ -312,6 +502,11 @@ function App() {
         ...prev,
         [activeSessionId]: [...(prev[activeSessionId] || []), botReply],
       }))
+
+      requestAnimationFrame(() => {
+        scrollToBottom('smooth')
+        textareaRef.current?.focus()
+      })
     } catch (error) {
       console.error('Send message failed:', error)
       setMessagesBySession((prev) => ({
@@ -385,11 +580,11 @@ function App() {
               </div>
             </div>
 
-            <div className="messages-list">
+            <div className="messages-list" ref={messagesListRef} onScroll={handleMessagesScroll}>
               {!activeSession ? (
                 <div className="empty-state">Select a session to view conversations.</div>
               ) : activeMessages.length === 0 ? (
-                <div className="empty-state">No messages in this chat yet.</div>
+                <div className="empty-state">{isLoadingMessages[activeSessionId] ? 'Loading messages...' : 'No messages in this chat yet.'}</div>
               ) : (
                 activeMessages.map((message) => (
                   <div key={message.id} className={`message-row ${message.sender}`}>
@@ -423,6 +618,7 @@ function App() {
 
             <form className="composer" onSubmit={handleSendMessage}>
               <textarea
+                ref={textareaRef}
                 value={draft}
                 onChange={(event) => setDraft(event.target.value)}
                 placeholder="Type your message here..."

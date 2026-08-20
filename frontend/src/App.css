@@ -362,7 +362,8 @@
   margin: 0 auto;
   display: grid;
   grid-template-columns: 480px 1fr;
-  min-height: calc(100vh - 120px);
+  height: calc(100vh - 120px);
+  min-height: 700px;
   background: rgba(15, 23, 42, 0.62);
   border: 1px solid rgba(148, 163, 184, 0.2);
   border-radius: 24px;
@@ -437,6 +438,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: 100%;
   width: 100%;
 }
 
@@ -464,12 +466,23 @@
 
 .messages-list {
   flex: 1;
+  min-height: 0;
   padding: 24px 28px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 18px;
   background: rgba(15, 23, 42, 0.2);
+  scrollbar-gutter: stable;
+}
+
+.messages-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.messages-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
 }
 
 .message-row {
@@ -515,6 +528,27 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.message-line strong,
+.message-line em {
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.message-line strong {
+  font-weight: 800;
+}
+
+.message-line.heading {
+  font-weight: 800;
+  color: #ffffff;
+  margin-top: 0.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.message-line.heading-3 {
+  font-size: 1.05rem;
 }
 
 .message-line.bullet {
