@@ -5,6 +5,7 @@ from api.v1.schemas.models import MessageModel
 from core.middleware import AuthMiddleware
 from services.chat_service import ChatMessageService, ChatSessionService
 from services.LLMs_service import GeminiLLM
+from core.exceptions import UnAuthorizedAccess
 
 chat_message_router = APIRouter(
     prefix="/v1/chat-message",
@@ -64,6 +65,21 @@ async def create_session(request: Request, payload: MessageModel, session_id: st
     return JSONResponse(status_code=201, content = return_payload)
     
 
-@chat_message_router.post("/{session_id}/messages", tags=["get_message"])
-async def query_messages(requet: Request): 
-    pass 
+@chat_message_router.get("/{session_id}/messages", tags=["get_message"])
+async def query_messages(request: Request, session_id: str, limit: int = 20, offset: int = 0): 
+    user_id = request.state.user_id
+
+    # permission access
+    try: 
+        await ChatSessionService.get_chat_session(session_id=session_id, user_id=user_id)
+    except UnAuthorizedAccess: 
+        return JSONResponse(status_code=400, content={"message": "You don't have access to this session messages."})
+
+    try:
+        messages = await ChatMessageService.query_message(session_id=session_id, limit=limit, offset=offset)
+    except Exception as e: 
+        return JSONResponse(status_code=400, content={"message": str(e)})
+
+    return JSONResponse(status_code=200, content = messages)
+        
+

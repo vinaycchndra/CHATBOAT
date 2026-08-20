@@ -188,8 +188,8 @@ class ChatMessageService:
             from_db_session_id =  message.sessionId.id  #session_detail.get("id") 
 
             message_dict = {
-                "id": message.id, 
-                "session_id": from_db_session_id, 
+                "id": str(message.id), 
+                "session_id": str(from_db_session_id), 
                 "role": message.role, 
                 "message": message.messageText, 
                 "is_summarized": message.isSummarized, 
