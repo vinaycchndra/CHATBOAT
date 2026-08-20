@@ -6,8 +6,17 @@ from api.v1.endpoints.chat_message_endpoints import chat_message_router
 from dotenv import load_dotenv
 from db.mongodb import initDb
 from services.EmbeddingService import VectorEmbeddingService
+from fastapi.middleware.cors import CORSMiddleware
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 app.include_router(user_router)
 app.include_router(chat_session_router)
 app.include_router(chat_message_router)

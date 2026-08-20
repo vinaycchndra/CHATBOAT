@@ -64,8 +64,6 @@ async def create_session(request: Request, payload: MessageModel, session_id: st
     return JSONResponse(status_code=201, content = return_payload)
     
 
-
-
-
-    
-    
+@chat_message_router.post("/{session_id}/messages", tags=["get_message"])
+async def query_messages(requet: Request): 
+    pass 

@@ -40,6 +40,7 @@ class GeminiLLM:
 
         systemMessageStr = """ You are a helpful assistant. Use the following pieces of context to answer the user's question.
                                     If you don't know the answer, just say that you don't know—do not try to make up an answer.
+                                    Please give stuctured answers with new line tags so that can be rendered properly.
 
                                     Context:
                                     {context} 
@@ -48,7 +49,7 @@ class GeminiLLM:
         systemMessage = ("system", systemMessageStr)
         message_inputs = {"context": context, "userQuestion": userQuestion}
 
-        if chatSummary: 
+        if chatSummary and False: 
             systemMessageStr = systemMessageStr + """\nSummary of conversation so far: \n{chatSummary}"""
             systemMessage = ("system", systemMessageStr)
             message_inputs["chatSummary"] = chatSummary
@@ -56,7 +57,7 @@ class GeminiLLM:
         # initialising the message sequence
         messages = [systemMessage]
 
-        if lastNChats: 
+        if lastNChats and False: 
             messages.append(MessagesPlaceholder(variable_name="lastNChats"))
             message_inputs["lastNChats"] = lastNChats
 
