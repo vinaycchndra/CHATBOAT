@@ -5,8 +5,12 @@ from vector_db.chroma_db import CromadbVectorDB
 from vector_db.abstractClasses import VectorItem
 from vector_db.vector_embedder import VectorHuggingFaceEmbeddingModel
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from dataAccessLayer.file_dal import FileMetaDataDal
 
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+logger.addHandler(logging.StreamHandler())
+
 
 class VectorEmbeddingService:
 
@@ -33,13 +37,14 @@ class VectorEmbeddingService:
             logger.exception(e)
 
     @classmethod 
-    async def createEmbeddingForFile(cls, fileType: str, filePath: str, userId: int, documentId: int): 
+    async def createEmbeddingForFile(cls, fileType: str, filePath: str, userId: int, documentId: str): 
         """
             fileType: str -> such as application/pdf
             filePath: str -> file address 
             userId: int -> User id trying to upload the file 
             documentId: int -> Id of the uploaded file in the database
         """
+        logger.info(f"Started Creating Embeddings for the file: {filePath} with document id: {documentId}")
 
         if fileType == "application/pdf": 
             file_parser_object = PdfParser(filePath=filePath)
@@ -92,6 +97,9 @@ class VectorEmbeddingService:
 
         if len(chunkTextList) > 0:
             await cls.__embedAndAddToVectorDb(chunkTextList, chunkMetaData)
+
+        await FileMetaDataDal.update_file_metadata(id=documentId, processed=True)
+        logger.info(f"Embeddings created for the file: {filePath} with document id: {documentId}")
 
     @classmethod
     async def QueryVectorDb(cls, user_id: int, text: str, top_n: int) -> List[Dict[str, Any]]: 

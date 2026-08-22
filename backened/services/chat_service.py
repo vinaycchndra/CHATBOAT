@@ -4,7 +4,7 @@ from dataAccessLayer.userDal import UserOdmLayer
 from core.exceptions import EntityDoesNotExist, UnAuthorizedAccess, NothingToUpdate
 from typing import Dict, List, Any
 from dateutil import parser
-from models.chatModels import ChatRoles
+from models.Models import ChatRoles
 from services.LLMs_service import GeminiLLM
 
 logger = logging.getLogger("__name__")

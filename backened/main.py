@@ -3,10 +3,12 @@ from core.middleware import AuthMiddleware
 from api.v1.endpoints.users_endpoints import user_router
 from api.v1.endpoints.chat_session_endpoints import chat_session_router
 from api.v1.endpoints.chat_message_endpoints import chat_message_router
+from api.v1.endpoints.file_endpoints import file_handling_router
 from dotenv import load_dotenv
 from db.mongodb import initDb
-from services.EmbeddingService import VectorEmbeddingService
+# from services.EmbeddingService import VectorEmbeddingService
 from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI()
 
@@ -20,6 +22,7 @@ app.add_middleware(
 app.include_router(user_router)
 app.include_router(chat_session_router)
 app.include_router(chat_message_router)
+app.include_router(file_handling_router)
 
 @app.on_event("startup")
 async def startup_event():

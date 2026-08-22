@@ -1,6 +1,6 @@
 import logging
 from bson.dbref import DBRef
-from models.chatModels import ChatSession, ChatMessage, ChatRoles
+from models.Models import ChatSession, ChatMessage, ChatRoles
 from models.user import User
 from uuid import UUID
 from core.exceptions import EntityDoesNotExist

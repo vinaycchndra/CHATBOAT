@@ -2,7 +2,7 @@ import os
 from beanie import init_beanie
 from pymongo import AsyncMongoClient
 from models.user import User
-from models.chatModels import ChatSession, ChatMessage
+from models.Models import ChatSession, ChatMessage, FileMetaData
 
 async def initDb():
     # Create Async PyMongo client
@@ -12,4 +12,4 @@ async def initDb():
         uuidRepresentation="standard"
     )
 
-    await init_beanie(database=client.db_name, document_models=[User, ChatSession, ChatMessage])
+    await init_beanie(database=client.db_name, document_models=[User, ChatSession, ChatMessage, FileMetaData])
