@@ -3,7 +3,7 @@ data
 .env
 __pycache__
 */__pycache__
-
+backened/upload_folder
 
 # Logs
 logs

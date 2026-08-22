@@ -171,8 +171,14 @@ function App() {
   const [isAiThinking, setIsAiThinking] = useState(false)
   const [sessionMessageOffsets, setSessionMessageOffsets] = useState({})
   const [isLoadingMessages, setIsLoadingMessages] = useState({})
+  const [uploadedDocs, setUploadedDocs] = useState([
+    { id: 1, name: 'Project-Overview.pdf', size: '2.3 MB', uploadedAt: 'Today' },
+    { id: 2, name: 'Customer-FAQs.pdf', size: '1.1 MB', uploadedAt: 'Yesterday' },
+  ])
+  const [isDocsModalOpen, setIsDocsModalOpen] = useState(false)
   const messagesListRef = useRef(null)
   const textareaRef = useRef(null)
+  const uploadInputRef = useRef(null)
 
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) || sessions[0] || null
   const activeMessages = activeSession ? messagesBySession[activeSessionId] || [] : []
@@ -426,6 +432,30 @@ function App() {
     setSessionUser(null)
   }
 
+  const handleUploadPdf = (event) => {
+    const files = Array.from(event.target.files || [])
+    if (!files.length) {
+      return
+    }
+
+    const nextDocs = files
+      .filter((file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))
+      .map((file, index) => ({
+        id: Date.now() + index,
+        name: file.name,
+        size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
+        uploadedAt: 'Just now',
+      }))
+
+    if (!nextDocs.length) {
+      return
+    }
+
+    setUploadedDocs((prev) => [...nextDocs, ...prev])
+    setIsDocsModalOpen(true)
+    event.target.value = ''
+  }
+
   const handleCreateSession = async () => {
     try {
       const response = await requestWithAuth('/v1/chat-session/create', {
@@ -526,6 +556,35 @@ function App() {
   if (sessionUser) {
     return (
       <div className="chat-app">
+        {isDocsModalOpen && (
+          <div className="auth-modal-backdrop" onClick={() => setIsDocsModalOpen(false)}>
+            <div className="docs-modal" onClick={(event) => event.stopPropagation()}>
+              <div className="auth-header">
+                <h3>My Documents</h3>
+                <button type="button" className="close-btn" onClick={() => setIsDocsModalOpen(false)}>
+                  ×
+                </button>
+              </div>
+
+              <div className="docs-list">
+                {uploadedDocs.length === 0 ? (
+                  <p className="empty-state">No PDFs uploaded yet.</p>
+                ) : (
+                  uploadedDocs.map((doc) => (
+                    <div key={doc.id} className="doc-item">
+                      <div className="doc-icon">PDF</div>
+                      <div className="doc-meta">
+                        <strong>{doc.name}</strong>
+                        <span>{doc.size} • {doc.uploadedAt}</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
         <header className="dashboard-header">
           <div className="brand">
             <div className="brand-mark">AI</div>
@@ -533,10 +592,29 @@ function App() {
           </div>
 
           <div className="dashboard-actions">
+            <button
+              type="button"
+              className="nav-button secondary-nav"
+              onClick={() => uploadInputRef.current?.click()}
+            >
+              Upload PDF
+            </button>
+            <button type="button" className="nav-button secondary-nav" onClick={() => setIsDocsModalOpen(true)}>
+              My Docs
+            </button>
             <span className="user-pill">{sessionUser.email}</span>
             <button className="nav-button" onClick={handleLogout}>Log out</button>
           </div>
         </header>
+
+        <input
+          ref={uploadInputRef}
+          type="file"
+          accept=".pdf,application/pdf"
+          multiple
+          hidden
+          onChange={handleUploadPdf}
+        />
 
         <div className="dashboard-shell">
           <aside className="sidebar">

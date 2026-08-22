@@ -666,6 +666,61 @@
   padding: 16px;
 }
 
+.docs-modal {
+  width: min(100%, 560px);
+  border-radius: 24px;
+  background: rgba(15, 23, 42, 0.96);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  padding: 24px;
+  max-height: 80vh;
+  overflow: auto;
+}
+
+.docs-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.doc-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+}
+
+.doc-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: rgba(239, 68, 68, 0.14);
+  color: #fecaca;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.doc-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.doc-meta strong {
+  color: #f8fafc;
+  word-break: break-word;
+}
+
+.doc-meta span {
+  color: rgba(226, 232, 240, 0.72);
+  font-size: 0.8rem;
+}
+
 .auth-modal {
   width: min(100%, 460px);
   border-radius: 24px;
