@@ -58,7 +58,8 @@ class FileMetaDataDal:
                                         updated_at: datetime = None, 
                                         is_uploaded: bool = None, 
                                         file_size: int = None, 
-                                        archived: bool = None
+                                        archived: bool = None,
+                                        processed: bool = None 
                                     ) -> List[FileMetaData]: 
 
         query_odm = FileMetaData.find()
@@ -90,6 +91,9 @@ class FileMetaDataDal:
 
         if archived is not None: 
             query_odm = query_odm.find(FileMetaData.archived == archived) 
+
+        if processed is not None: 
+            query_odm = query_odm.find(FileMetaData.processed == processed)
         
         if created_at: 
             query_odm = query_odm.find({"created_at": {"$gte": created_at}})

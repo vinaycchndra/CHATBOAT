@@ -30,6 +30,10 @@ async def create_file(request: Request, file: UploadFile, background_task: Backg
     # file size
     uploaded_file_size = file.size
 
+    # only pdfs allowed so far
+    if uploaded_file_type != "application/pdf": 
+        return JSONResponse(status_code=400, content={"message": "Only pdfs are allowed to upload."})
+
     # Checking if a similar file upload is attempted by the user earlier
     file_list = await FileMetaDataService.query_file_metadata(
         user_ids=[user_id], 
@@ -74,3 +78,14 @@ async def create_file(request: Request, file: UploadFile, background_task: Backg
     )
     return JSONResponse(status_code=201, content={"message": "Uploaded Successfully.", "data": data})
 
+@file_handling_router.get("", tags=["list_files"])
+async def get_files(request: Request, uploaded: str = None, archived: bool = None, processed: bool = None):
+    user_id = request.state.user_id
+    try:
+        data = await FileMetaDataService.get_files(user_id = user_id, is_uploaded=uploaded, archived=archived, processed=processed)
+    except Exception as e: 
+        return JSONResponse(status_code=400, content={"message": str(e)})
+
+    return JSONResponse(status_code=200, content={"data": data})
+
+    

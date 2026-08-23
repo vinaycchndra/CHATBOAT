@@ -98,6 +98,29 @@ class FileMetaDataService:
             "file_size": obj.file_size, 
             "uploaded": obj.uploaded, 
             "processed": obj.processed,  
+            "archived": obj.archived,
             "created_at": str(obj.created_at), 
             "updated_at": str(obj.updated_at), 
         }
+
+    @classmethod
+    async def get_files(cls, user_id: str, is_uploaded: bool = None, archived: bool = None, processed: bool = None): 
+        query = {"user_ids": [user_id]} 
+
+        if is_uploaded is not None: 
+            query["is_uploaded"] = is_uploaded
+
+        if archived is not None: 
+            query["archived"] = archived
+
+        if processed is not None: 
+            query["processed"] = processed
+
+        file_metadata_list = await FileMetaDataDal.query_file_metadata(
+                    **query
+                    )
+        res = []
+        for file_metadata in file_metadata_list: 
+            res.append(cls.__get_response_payload(file_metadata))
+
+        return res

@@ -176,6 +176,11 @@ function App() {
     { id: 2, name: 'Customer-FAQs.pdf', size: '1.1 MB', uploadedAt: 'Yesterday' },
   ])
   const [isDocsModalOpen, setIsDocsModalOpen] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [uploadSuccess, setUploadSuccess] = useState([])
+  const [uploadToast, setUploadToast] = useState({ visible: false, type: 'success', title: '', message: '', files: [] })
+  const [isFetchingDocs, setIsFetchingDocs] = useState(false)
   const messagesListRef = useRef(null)
   const textareaRef = useRef(null)
   const uploadInputRef = useRef(null)
@@ -432,28 +437,105 @@ function App() {
     setSessionUser(null)
   }
 
-  const handleUploadPdf = (event) => {
+  const handleUploadPdf = async (event) => {
+    setUploadError('')
     const files = Array.from(event.target.files || [])
-    if (!files.length) {
-      return
-    }
+    if (!files.length) return
 
-    const nextDocs = files
-      .filter((file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))
-      .map((file, index) => ({
-        id: Date.now() + index,
-        name: file.name,
-        size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
-        uploadedAt: 'Just now',
+    const pdfFiles = files.filter((file) => file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf'))
+    if (!pdfFiles.length) return
+
+    setIsUploading(true)
+    try {
+      const uploadResults = []
+
+      for (const file of pdfFiles) {
+        const form = new FormData()
+        form.append('file', file)
+
+        const headers = {}
+        const token = getAuthToken()
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const resp = await fetch(`${API_BASE}/v1/file`, {
+          method: 'POST',
+          headers,
+          body: form,
+        })
+
+        const data = await resp.json().catch(() => null)
+        if (!resp.ok) {
+          const msg = data?.message || `Upload failed for ${file.name}`
+          throw new Error(msg)
+        }
+
+        uploadResults.push(data)
+      }
+
+      // Merge uploaded files into UI list using backend response when available
+      const nextDocs = uploadResults
+        .map((res, index) => {
+          const d = res?.data
+          if (!d) return null
+          return {
+            id: d.id || `uploaded-${Date.now()}-${index}`,
+            name: d.file_name || pdfFiles[index].name,
+            size: d.file_size ? `${(d.file_size / (1024 * 1024)).toFixed(2)} MB` : `${(pdfFiles[index].size / (1024 * 1024)).toFixed(2)} MB`,
+            uploadedAt: d.created_at || 'Just now',
+          }
+        })
+        .filter(Boolean)
+
+      setUploadedDocs((prev) => [...nextDocs, ...prev])
+      setUploadSuccess(nextDocs)
+      setUploadError('')
+      // Show toast instead of opening the My Docs modal immediately
+      setUploadToast({
+        visible: true,
+        type: 'success',
+        title: 'Upload successful',
+        message: `${nextDocs.length} file(s) uploaded successfully.`,
+        files: nextDocs,
+      })
+      // Auto-dismiss after a few seconds
+      setTimeout(() => setUploadToast((t) => ({ ...t, visible: false })), 6000)
+    } catch (err) {
+      console.error('Upload error:', err)
+      // Improve duplicate-file message clarity for users
+      const msg = err.message || 'Upload failed'
+      const userMessage = msg.toLowerCase().includes('already uploaded')
+        ? 'This file appears to be already uploaded. If you meant to upload a new file, rename it and try again.'
+        : msg
+      setUploadError(userMessage)
+      setUploadSuccess([])
+      setUploadToast({ visible: true, type: 'error', title: 'Upload failed', message: userMessage, files: [] })
+      setTimeout(() => setUploadToast((t) => ({ ...t, visible: false })), 8000)
+    } finally {
+      setIsUploading(false)
+      event.target.value = ''
+    }
+  }
+
+  const loadDocsFromBackend = async () => {
+    setIsFetchingDocs(true)
+    setUploadError('')
+    try {
+      const response = await requestWithAuth('/v1/file?is_uploaded=true', { method: 'GET' })
+      const list = Array.isArray(response?.data) ? response.data : []
+      const mapped = list.map((d) => ({
+        id: d.id,
+        name: d.file_name,
+        size: d.file_size ? `${(d.file_size / (1024 * 1024)).toFixed(2)} MB` : '—',
+        uploadedAt: d.created_at || '',
+        processed: !!d.processed,
       }))
-
-    if (!nextDocs.length) {
-      return
+      setUploadedDocs(mapped)
+    } catch (err) {
+      console.error('Failed to load docs:', err)
+      setUploadError('Could not load documents. Please try again later.')
+    } finally {
+      setIsFetchingDocs(false)
     }
-
-    setUploadedDocs((prev) => [...nextDocs, ...prev])
-    setIsDocsModalOpen(true)
-    event.target.value = ''
   }
 
   const handleCreateSession = async () => {
@@ -561,21 +643,44 @@ function App() {
             <div className="docs-modal" onClick={(event) => event.stopPropagation()}>
               <div className="auth-header">
                 <h3>My Documents</h3>
-                <button type="button" className="close-btn" onClick={() => setIsDocsModalOpen(false)}>
-                  ×
-                </button>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className="secondary-btn"
+                    onClick={loadDocsFromBackend}
+                    disabled={isFetchingDocs}
+                    style={{ padding: '6px 10px' }}
+                  >
+                    {isFetchingDocs ? 'Refreshing...' : 'Refresh'}
+                  </button>
+                  <button type="button" className="close-btn" onClick={() => setIsDocsModalOpen(false)}>
+                    ×
+                  </button>
+                </div>
               </div>
 
               <div className="docs-list">
-                {uploadedDocs.length === 0 ? (
+                {isFetchingDocs ? (
+                  <p className="empty-state">Loading documents…</p>
+                ) : uploadedDocs.length === 0 ? (
                   <p className="empty-state">No PDFs uploaded yet.</p>
                 ) : (
                   uploadedDocs.map((doc) => (
-                    <div key={doc.id} className="doc-item">
+                    <div key={doc.id} className="doc-item" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <div className="doc-icon">PDF</div>
-                      <div className="doc-meta">
-                        <strong>{doc.name}</strong>
-                        <span>{doc.size} • {doc.uploadedAt}</span>
+                      <div className="doc-meta" style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                          <strong style={{ wordBreak: 'break-all' }}>{doc.name}</strong>
+                          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                            <span style={{ fontSize: 13, color: 'var(--muted)' }}>{doc.size}</span>
+                            {doc.processed ? (
+                              <span style={{ background: '#e6fffa', color: '#055d46', padding: '4px 8px', borderRadius: 999, fontSize: 12, border: '1px solid #c7f3e6' }}>AI ready</span>
+                            ) : (
+                              <span style={{ background: '#fff7ed', color: '#7a4d00', padding: '4px 8px', borderRadius: 999, fontSize: 12, border: '1px solid #ffe8c2' }}>Processing</span>
+                            )}
+                          </div>
+                        </div>
+                        <div style={{ marginTop: 6, fontSize: 13, color: 'var(--muted)' }}>{doc.uploadedAt}</div>
                       </div>
                     </div>
                   ))
@@ -596,16 +701,113 @@ function App() {
               type="button"
               className="nav-button secondary-nav"
               onClick={() => uploadInputRef.current?.click()}
+              disabled={isUploading}
             >
-              Upload PDF
+              {isUploading ? 'Uploading...' : 'Upload PDF'}
             </button>
-            <button type="button" className="nav-button secondary-nav" onClick={() => setIsDocsModalOpen(true)}>
+            <button
+              type="button"
+              className="nav-button secondary-nav"
+              onClick={async () => {
+                await loadDocsFromBackend()
+                setIsDocsModalOpen(true)
+              }}
+            >
               My Docs
             </button>
             <span className="user-pill">{sessionUser.email}</span>
             <button className="nav-button" onClick={handleLogout}>Log out</button>
           </div>
         </header>
+
+        {uploadToast.visible && (
+          <>
+            <div
+              className="upload-toast-backdrop"
+              onClick={() => setUploadToast((t) => ({ ...t, visible: false }))}
+              style={{
+                position: 'fixed',
+                inset: 0,
+                background: 'rgba(0,0,0,0.32)',
+                zIndex: 1190,
+                backdropFilter: 'blur(2px)'
+              }}
+            />
+
+            <div
+              className="upload-toast-centered"
+              role="dialog"
+              aria-live="polite"
+              style={{
+                position: 'fixed',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                zIndex: 1200,
+                width: 'min(520px, 92%)',
+                padding: 20,
+                borderRadius: 12,
+                boxShadow: '0 20px 40px rgba(2,6,23,0.35)',
+                background: uploadToast.type === 'error' ? '#FFF5F5' : '#F6FFFA',
+                border: `1px solid ${uploadToast.type === 'error' ? '#FFD6D6' : '#D1FADF'}`,
+                color: 'var(--text, #0b1220)'
+              }}
+            >
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                <div style={{ fontSize: 26 }}>
+                  {uploadToast.type === 'error' ? '❌' : '✅'}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <strong style={{ fontSize: 16 }}>{uploadToast.title}</strong>
+                    <button
+                      type="button"
+                      onClick={() => setUploadToast((t) => ({ ...t, visible: false }))}
+                      aria-label="Close upload message"
+                      style={{ background: 'transparent', border: 'none', fontSize: 18, lineHeight: 1 }}
+                    >
+                      ×
+                    </button>
+                  </div>
+
+                  <div style={{ marginTop: 8, color: uploadToast.type === 'error' ? '#6b0b0b' : '#0f5132' }}>
+                    {uploadToast.message}
+                  </div>
+
+                  {uploadToast.files && uploadToast.files.length > 0 && (
+                    <ul style={{ marginTop: 10, paddingLeft: 18 }}>
+                      {uploadToast.files.map((f) => (
+                        <li key={f.id} style={{ fontSize: 13, marginBottom: 4 }}>
+                          {f.name} • {f.size}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  <div style={{ marginTop: 14, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                    <button
+                      type="button"
+                      className="secondary-btn"
+                      onClick={() => {
+                        setIsDocsModalOpen(true)
+                        setUploadToast((t) => ({ ...t, visible: false }))
+                      }}
+                    >
+                      View docs
+                    </button>
+                    <button
+                      type="button"
+                      className="primary-btn"
+                      onClick={() => setUploadToast((t) => ({ ...t, visible: false }))}
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
 
         <input
           ref={uploadInputRef}
@@ -615,6 +817,9 @@ function App() {
           hidden
           onChange={handleUploadPdf}
         />
+
+        {/* Fetch docs from backend */}
+        
 
         <div className="dashboard-shell">
           <aside className="sidebar">
