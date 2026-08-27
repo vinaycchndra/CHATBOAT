@@ -4,6 +4,9 @@ from chromadb import AsyncHttpClient
 from vector_db.constants import VECTOR_DB_COLLECTION, VECTOR_DB_HOST, VECTOR_DB_PORT
 from vector_db.abstractClasses import VectorDBAbstract, VectorItem
 
+# quadrant imports 
+from qdrant_client import AsyncQdrantClient, models
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,5 +74,111 @@ class CromadbVectorDB(VectorDBAbstract):
             else: 
                 input_["metadata"] = dict()
 
+            result.append(VectorItem(**input_))
+        return result
+
+# Concrete Quandrant db class
+# this is required as the cromadb does not support hybrid search for the local setup.
+class QuadrantVectorDB(VectorDBAbstract): 
+    _instance = None 
+
+    @classmethod
+    async def getVectorDb(cls) -> VectorDBAbstract: 
+        if cls._instance is None:
+            client = AsyncQdrantClient(host=VECTOR_DB_HOST, port=int(VECTOR_DB_PORT)) 
+            collection_exists = await client.collection_exists(collection_name=VECTOR_DB_COLLECTION)
+            if not collection_exists:
+                await client.create_collection(
+                        collection_name=VECTOR_DB_COLLECTION,
+                        vectors_config={
+                            "dense": models.VectorParams(
+                                size=384,
+                                distance=models.Distance.COSINE,
+                            ),
+                            "multi": models.VectorParams(
+                                size=96,
+                                distance=models.Distance.COSINE,
+                                multivector_config=models.MultiVectorConfig(
+                                    comparator=models.MultiVectorComparator.MAX_SIM,
+                                ),
+                                hnsw_config=models.HnswConfigDiff(m=0)  #  Disable HNSW for reranking
+                            ),
+                        },
+                        sparse_vectors_config={
+                            "sparse": models.SparseVectorParams(modifier=models.Modifier.IDF)
+                        }
+                    )
+            cls._instance = cls()
+            cls._instance.client = client
+            cls._instance.dense_embedding_model = "sentence-transformers/all-MiniLM-L6-v2"
+            cls._instance.sparse_embedding_model = "qdrant/bm25"
+            cls._instance.late_interaction_embedding_model = "answerdotai/answerai-colbert-small-v1"
+
+        return cls._instance
+
+
+    async def add(self, documents: List[VectorItem]): 
+        points = [
+                    models.PointStruct(
+                            id=document.id,
+                            vector={
+                                "dense": document.embedding,
+                                "sparse": models.Document(text=document.document, model=self.sparse_embedding_model),
+                                "multi": models.Document(text=document.document, model=self.late_interaction_embedding_model),
+                            },
+                            payload={"text": document.document, **document.metadata}
+                        )
+                        for document in documents
+                ]
+
+        try:
+            await self.client.upsert(collection_name=VECTOR_DB_COLLECTION, points=points)    
+        except Exception as e: 
+            logger.exception(e)
+            raise Exception("Something happened while trying to add to the collection")
+
+    async def query(self, document: VectorItem, top_n: int) -> List[VectorItem]: 
+
+        prefetch = [
+            models.Prefetch(
+                query=document.embedding,
+                using="dense",
+                filter = models.Filter(
+                                      must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=document.metadata.get("user_id")))]
+                                    ),
+                limit=top_n,
+            ),
+            models.Prefetch(
+                query=models.Document(text=document.document, model=self.sparse_embedding_model),
+                using="sparse",
+                filter = models.Filter(
+                      must=[models.FieldCondition(key="user_id", match=models.MatchValue(value=document.metadata.get("user_id")))]
+                    ),
+                limit=top_n,
+            ),
+        ]
+        
+        res = await self.client.query_points(
+                    VECTOR_DB_COLLECTION,
+                    prefetch=prefetch,
+                    query=models.Document(text=document.document, model=self.late_interaction_embedding_model),
+                    using="multi",
+                    with_payload=True,
+                    limit=top_n,   
+                )
+
+        res = res.points
+        result = []
+        
+        for point in res:
+            input_ = {}
+            payload= point.payload
+
+            input_["id"] = point.id
+            input_["document"] = payload.get("text")
+
+            del payload["text"]
+            input_["metadata"] = payload
+            
             result.append(VectorItem(**input_))
         return result

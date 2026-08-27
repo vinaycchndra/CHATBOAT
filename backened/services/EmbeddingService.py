@@ -1,7 +1,7 @@
 import uuid, logging
 from typing import List, Any, Dict
 from file_parser.pdfFileParser import PdfParser
-from vector_db.chroma_db import CromadbVectorDB
+from vector_db.chroma_db import QuadrantVectorDB #CromadbVectorDB
 from vector_db.abstractClasses import VectorItem
 from vector_db.vector_embedder import VectorHuggingFaceEmbeddingModel
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -17,7 +17,7 @@ class VectorEmbeddingService:
     @classmethod 
     async def __embedAndAddToVectorDb(cls, textChunkList: List[str], metaDataList: List[str]): 
         vectorEmbedder = VectorHuggingFaceEmbeddingModel.getVectorEmbedder()
-        vectorDb = await CromadbVectorDB.getVectorDb()
+        vectorDb = await QuadrantVectorDB.getVectorDb()
         # create vector embeddings 
         try: 
             embeddings = await vectorEmbedder.aembed_documents(textChunkList)
@@ -90,7 +90,7 @@ class VectorEmbeddingService:
                     chunkMetaData.append(doc.metadata)
 
 
-            if len(chunkTextList) >= 200:
+            if len(chunkTextList) >= 100:
                 await cls.__embedAndAddToVectorDb(chunkTextList, chunkMetaData)
                 chunkTextList.clear()
                 chunkMetaData.clear()
@@ -113,13 +113,13 @@ class VectorEmbeddingService:
             return []
         
         vectorEmbedder = VectorHuggingFaceEmbeddingModel.getVectorEmbedder()
-        vectorDb = await CromadbVectorDB.getVectorDb()  
+        vectorDb = await QuadrantVectorDB.getVectorDb()  
 
         # create embedding
         embeddings = await vectorEmbedder.aembed_documents([text])
 
         #create vector item object
-        queryDTO = VectorItem(embedding=embeddings[0], metadata={"user_id": user_id})
+        queryDTO = VectorItem(document=text, embedding=embeddings[0], metadata={"user_id": user_id})
 
         # query
         try: 

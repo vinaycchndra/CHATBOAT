@@ -37,31 +37,29 @@ class GeminiLLM:
                         ("ai", "No."),
                     ]
         """
-
-        systemMessageStr = """ You are a helpful assistant. Use the following pieces of context to answer the user's question.
-                                    If you don't know the answer, just say that you don't know—do not try to make up an answer.
-                                    Please give stuctured answers with new line tags so that can be rendered properly.
-
-                                    Context:
-                                    {context} 
-                        """
+        if not userQuestion: 
+            return "??"
+         
+        systemMessageStr = """ You are a helpful assistant of a huam. Use the following pieces of context to answer the human's question.If no context is available, just say that you don't know—do not try to make up an answer.Please give stuctured answers with new line tags so that can be rendered properly.\n Provided context is:\n' {context} '"""
 
         systemMessage = ("system", systemMessageStr)
-        message_inputs = {"context": context, "userQuestion": userQuestion}
+        message_inputs = {"context": context}
 
-        if chatSummary and False: 
-            systemMessageStr = systemMessageStr + """\nSummary of conversation so far: \n{chatSummary}"""
+        if chatSummary: 
+            systemMessageStr = systemMessageStr + """\nSummary of conversation so far between you and human is: \n{chatSummary}"""
             systemMessage = ("system", systemMessageStr)
             message_inputs["chatSummary"] = chatSummary
 
         # initialising the message sequence
         messages = [systemMessage]
 
-        if lastNChats and False: 
-            messages.append(MessagesPlaceholder(variable_name="lastNChats"))
-            message_inputs["lastNChats"] = lastNChats
+        if lastNChats: 
+            # reversing the messages
+            lastNChats = lastNChats[::-1]
+            messages = messages + lastNChats
 
-        messages.append(("human", "{userQuestion}"))    
+        # current question of the user    
+        messages.append(("human", userQuestion))    
         prompt = ChatPromptTemplate.from_messages(messages)
 
         try: 
