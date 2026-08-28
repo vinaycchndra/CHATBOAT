@@ -15,7 +15,7 @@ chat_message_router = APIRouter(
 )
 
 @chat_message_router.post("/{session_id}/send", tags=["send_message"])
-async def create_session(request: Request, payload: MessageModel, session_id: str, background_tasks: BackgroundTasks): 
+async def create_response(request: Request, payload: MessageModel, session_id: str, background_tasks: BackgroundTasks): 
     try: 
         user_id = request.state.user_id
 
@@ -53,7 +53,7 @@ async def create_session(request: Request, payload: MessageModel, session_id: st
         await ChatMessageService.create_messasge(session_id=session_id, role="human", message_text=human_message)
 
         # save model reponse into the db
-        saved_ai_message = await ChatMessageService.create_messasge(session_id=session_id, role="ai", message_text=ai_response)
+        saved_ai_message = await ChatMessageService.create_messasge(session_id=session_id, role="ai", message_text=ai_response.get("response_text"))
 
         return_payload = {
             "role": saved_ai_message.get("role"), 

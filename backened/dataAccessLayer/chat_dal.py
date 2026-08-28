@@ -159,7 +159,7 @@ class ChatMessageOdmLayer:
             chat_messages = await query_odm.sort("-created_at").to_list(None) 
         except Exception: 
             logger.exception("Something happend while querying chat messages.")
-           
+            raise 
         return chat_messages   
 
     @classmethod

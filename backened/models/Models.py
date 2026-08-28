@@ -32,6 +32,7 @@ class ChatMessage(Document):
     role: ChatRoles
     messageText: str
     isSummarized: bool = False
+    web_response: str = Field(default="")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 

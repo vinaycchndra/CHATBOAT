@@ -1,9 +1,16 @@
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from typing import List, Optional
+from langchain_core.prompts import ChatPromptTemplate
+from typing import List, Optional, Dict
 import logging 
+from pydantic import BaseModel,Field
 
 logger  = logging.getLogger(__name__)
+
+
+# LLM response forcing model
+class LLMResponseModel(BaseModel): 
+    informed_response: bool = Field(description="True when the ai knows answer, False when the ai does not know the answer")
+    response_text: str = Field(description="Response from the ai")
 
 class GeminiLLM: 
     _instance = None 
@@ -19,7 +26,7 @@ class GeminiLLM:
         return  cls._instance   
 
     @classmethod
-    async def sendMessageToLLM(cls, userQuestion: str, context: str, chatSummary:Optional[str], lastNChats: Optional[List[tuple[str, str]]]) -> str: 
+    async def sendMessageToLLM(cls, userQuestion: str, context: str, chatSummary:Optional[str], lastNChats: Optional[List[tuple[str, str]]]) -> Dict: 
         """
             userQuestion: str -> Question asked by user.
             context: str -> '\n' separated context fetched from vector db
@@ -74,13 +81,14 @@ class GeminiLLM:
             logger.exception(e)
             raise Exception("Could not initialise the llm.")
 
+        model_with_structure = llm.with_structured_output(LLMResponseModel)
+
         try: 
-            ai_response = await llm.ainvoke(res)
+            ai_response = await model_with_structure.ainvoke(res)
         except Exception as e: 
             logger.exception(e)
             raise Exception("Something happend while calling to the llm")
-
-        return ai_response.content[0]["text"]
+        return ai_response.model_dump()
 
 
     @classmethod
