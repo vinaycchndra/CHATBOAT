@@ -185,12 +185,26 @@ function App() {
     sessionId: '',
     messageId: null,
   })
+  const [webSearchingMessageId, setWebSearchingMessageId] = useState(null)
+  const [webResponseModal, setWebResponseModal] = useState({ isOpen: false, content: '' })
   const messagesListRef = useRef(null)
   const textareaRef = useRef(null)
   const uploadInputRef = useRef(null)
 
   const activeSession = sessions.find((session) => session.session_id === activeSessionId) || sessions[0] || null
   const activeMessages = activeSession ? messagesBySession[activeSessionId] || [] : []
+
+  useEffect(() => {
+    if (!recentUninformedAction.sessionId || !recentUninformedAction.messageId) {
+      return undefined
+    }
+
+    const timeoutId = setTimeout(() => {
+      setRecentUninformedAction({ sessionId: '', messageId: null })
+    }, 5000)
+
+    return () => clearTimeout(timeoutId)
+  }, [recentUninformedAction.sessionId, recentUninformedAction.messageId])
 
   const scrollToBottom = (behavior = 'auto') => {
     const container = messagesListRef.current
@@ -272,6 +286,7 @@ function App() {
           time: message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Just now',
           createdAt: message.created_at,
           isInformed: message.is_informed ?? message.isInformed ?? true,
+          webResponse: message.web_response ?? message.webResponse ?? '',
         }))
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
 
@@ -594,6 +609,10 @@ function App() {
       return
     }
 
+    if (webSearchingMessageId === message.id) {
+      return
+    }
+
     const aiMessageId = message.aiMessageId || message.ai_message_id || message.id
     const humanMessageId = message.humanMessageId || message.human_message_id
 
@@ -601,6 +620,8 @@ function App() {
       console.error('Missing AI or human message ids for web search')
       return
     }
+
+    setWebSearchingMessageId(message.id)
 
     try {
       const response = await requestWithAuth(`/v1/chat-message/${activeSessionId}/message/web_search_agent`, {
@@ -618,6 +639,7 @@ function App() {
         humanMessageId: response?.human_message_id || humanMessageId,
         text: response?.message || message.text,
         isInformed: response?.is_informed ?? true,
+        webResponse: response?.web_response ?? response?.webResponse ?? message.webResponse ?? '',
         time: response?.updated_at ? new Date(response.updated_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : message.time,
       }
 
@@ -629,6 +651,8 @@ function App() {
       setRecentUninformedAction({ sessionId: '', messageId: null })
     } catch (error) {
       console.error('Web search failed:', error)
+    } finally {
+      setWebSearchingMessageId(null)
     }
   }
 
@@ -644,6 +668,7 @@ function App() {
       text: response?.message || 'No response received.',
       time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
       isInformed: response?.is_informed ?? response?.isInformed ?? true,
+      webResponse: response?.web_response ?? response?.webResponse ?? '',
       aiMessageId: response?.ai_message_id || response?.message_id || null,
       humanMessageId: response?.human_message_id || null,
     }
@@ -947,6 +972,23 @@ function App() {
           </aside>
 
           <main className="chat-panel">
+            {webResponseModal.isOpen && (
+              <div className="auth-modal-backdrop" onClick={() => setWebResponseModal({ isOpen: false, content: '' })}>
+                <div className="docs-modal web-response-modal" onClick={(event) => event.stopPropagation()}>
+                  <div className="auth-header">
+                    <h3>Web Response</h3>
+                    <button type="button" className="close-btn" onClick={() => setWebResponseModal({ isOpen: false, content: '' })}>
+                      ×
+                    </button>
+                  </div>
+
+                  <div className="web-response-content">
+                    {webResponseModal.content ? formatMessageText(webResponseModal.content) : <p className="empty-state">No web response available.</p>}
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div className="chat-header">
               <div>
                 <p className="chat-label">Current session</p>
@@ -961,11 +1003,18 @@ function App() {
                 <div className="empty-state">{isLoadingMessages[activeSessionId] ? 'Loading messages...' : 'No messages in this chat yet.'}</div>
               ) : (
                 activeMessages.map((message) => {
+                  const isBotUninformed = message.sender === 'bot' && message.isInformed === false
                   const showUninformedAction =
+                    isBotUninformed &&
+                    (webSearchingMessageId === message.id ||
+                      (recentUninformedAction.sessionId === activeSessionId &&
+                        recentUninformedAction.messageId === message.id))
+
+                  const hasWebResponse =
                     message.sender === 'bot' &&
-                    message.isInformed === false &&
-                    recentUninformedAction.sessionId === activeSessionId &&
-                    recentUninformedAction.messageId === message.id
+                    message.isInformed === true &&
+                    typeof message.webResponse === 'string' &&
+                    message.webResponse.trim().length > 0
 
                   return (
                     <div key={message.id} className={`message-row ${message.sender}`}>
@@ -976,12 +1025,28 @@ function App() {
                         </div>
 
                         {showUninformedAction && (
+                          webSearchingMessageId === message.id ? (
+                            <div className="searching-status" aria-live="polite">
+                              Searching the internet for your query...
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="uninformed-action-btn"
+                              onClick={() => handleWebSearchAndAnswer(message)}
+                            >
+                              Do web search and answer
+                            </button>
+                          )
+                        )}
+
+                        {hasWebResponse && (
                           <button
                             type="button"
-                            className="uninformed-action-btn"
-                            onClick={() => handleWebSearchAndAnswer(message)}
+                            className="web-response-btn"
+                            onClick={() => setWebResponseModal({ isOpen: true, content: message.webResponse })}
                           >
-                            Do web search and answer
+                            Web Response
                           </button>
                         )}
 
