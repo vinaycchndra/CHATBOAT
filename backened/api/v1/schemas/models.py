@@ -32,4 +32,8 @@ class MessageModel(BaseModel):
     role: Optional[ChatModelRoles] = None 
     message_text: str 
     is_summarized: Optional[bool] = None
-    
+
+
+class WebSearchModel(BaseModel):
+    ai_message_id: str 
+    human_message_id: str

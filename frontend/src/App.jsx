@@ -181,6 +181,10 @@ function App() {
   const [uploadSuccess, setUploadSuccess] = useState([])
   const [uploadToast, setUploadToast] = useState({ visible: false, type: 'success', title: '', message: '', files: [] })
   const [isFetchingDocs, setIsFetchingDocs] = useState(false)
+  const [recentUninformedAction, setRecentUninformedAction] = useState({
+    sessionId: '',
+    messageId: null,
+  })
   const messagesListRef = useRef(null)
   const textareaRef = useRef(null)
   const uploadInputRef = useRef(null)
@@ -263,10 +267,11 @@ function App() {
       const normalizedMessages = nextMessages
         .map((message) => ({
           id: message.id,
-          sender: message.role === 'human' ? 'user' : 'bot',
+          sender: message.role === 'human' || message.role === 'user' ? 'user' : 'bot',
           text: message.message,
           time: message.created_at ? new Date(message.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'Just now',
           createdAt: message.created_at,
+          isInformed: message.is_informed ?? message.isInformed ?? true,
         }))
         .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
 
@@ -355,6 +360,24 @@ function App() {
 
     requestAnimationFrame(() => scrollToBottom('auto'))
   }, [activeSessionId])
+
+  useEffect(() => {
+    if (!recentUninformedAction.messageId) {
+      return
+    }
+
+    const timer = setTimeout(() => {
+      setRecentUninformedAction((prev) => {
+        if (prev.messageId !== recentUninformedAction.messageId) {
+          return prev
+        }
+
+        return { sessionId: '', messageId: null }
+      })
+    }, 5000)
+
+    return () => clearTimeout(timer)
+  }, [recentUninformedAction.messageId, recentUninformedAction.sessionId])
 
   useEffect(() => {
     if (!textareaRef.current) {
@@ -566,6 +589,49 @@ function App() {
     }
   }
 
+  const handleWebSearchAndAnswer = async (message) => {
+    if (!activeSessionId || !message || message.sender !== 'bot') {
+      return
+    }
+
+    const aiMessageId = message.aiMessageId || message.ai_message_id || message.id
+    const humanMessageId = message.humanMessageId || message.human_message_id
+
+    if (!aiMessageId || !humanMessageId) {
+      console.error('Missing AI or human message ids for web search')
+      return
+    }
+
+    try {
+      const response = await requestWithAuth(`/v1/chat-message/${activeSessionId}/message/web_search_agent`, {
+        method: 'PUT',
+        body: {
+          ai_message_id: String(aiMessageId),
+          human_message_id: String(humanMessageId),
+        },
+      })
+
+      const updatedAiMessage = {
+        ...message,
+        id: response?.ai_message_id || aiMessageId,
+        aiMessageId: response?.ai_message_id || aiMessageId,
+        humanMessageId: response?.human_message_id || humanMessageId,
+        text: response?.message || message.text,
+        isInformed: response?.is_informed ?? true,
+        time: response?.updated_at ? new Date(response.updated_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : message.time,
+      }
+
+      setMessagesBySession((prev) => ({
+        ...prev,
+        [activeSessionId]: (prev[activeSessionId] || []).map((item) => (item.id === message.id ? updatedAiMessage : item)),
+      }))
+
+      setRecentUninformedAction({ sessionId: '', messageId: null })
+    } catch (error) {
+      console.error('Web search failed:', error)
+    }
+  }
+
   const sendMessageToBackend = async (sessionId, text) => {
     const response = await requestWithAuth(`/v1/chat-message/${sessionId}/send`, {
       method: 'POST',
@@ -573,10 +639,13 @@ function App() {
     })
 
     return {
-      id: Date.now() + 10,
-      sender: response?.role === 'human' ? 'user' : 'bot',
+      id: response?.ai_message_id || response?.message_id || Date.now() + 10,
+      sender: response?.role === 'human' || response?.role === 'user' ? 'user' : 'bot',
       text: response?.message || 'No response received.',
       time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+      isInformed: response?.is_informed ?? response?.isInformed ?? true,
+      aiMessageId: response?.ai_message_id || response?.message_id || null,
+      humanMessageId: response?.human_message_id || null,
     }
   }
 
@@ -589,10 +658,11 @@ function App() {
     }
 
     const newUserMessage = {
-      id: Date.now(),
+      id: `pending-human-${Date.now()}`,
       sender: 'user',
       text: trimmedMessage,
       time: new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }),
+      humanMessageId: null,
     }
 
     setMessagesBySession((prev) => ({
@@ -609,11 +679,32 @@ function App() {
 
     try {
       const botReply = await sendMessageToBackend(activeSessionId, trimmedMessage)
+      const resolvedBotReply = {
+        ...botReply,
+        id: botReply.aiMessageId || botReply.id,
+        aiMessageId: botReply.aiMessageId || botReply.id,
+        humanMessageId: botReply.humanMessageId || newUserMessage.id,
+      }
+
+      const persistedUserMessage = {
+        ...newUserMessage,
+        id: resolvedBotReply.humanMessageId || newUserMessage.id,
+        humanMessageId: resolvedBotReply.humanMessageId || null,
+      }
 
       setMessagesBySession((prev) => ({
         ...prev,
-        [activeSessionId]: [...(prev[activeSessionId] || []), botReply],
+        [activeSessionId]: (prev[activeSessionId] || []).map((item) =>
+          item.id === newUserMessage.id ? persistedUserMessage : item,
+        ).concat(resolvedBotReply),
       }))
+
+      if (resolvedBotReply.sender === 'bot' && resolvedBotReply.isInformed === false) {
+        setRecentUninformedAction({
+          sessionId: activeSessionId,
+          messageId: resolvedBotReply.aiMessageId,
+        })
+      }
 
       requestAnimationFrame(() => {
         scrollToBottom('smooth')
@@ -869,17 +960,36 @@ function App() {
               ) : activeMessages.length === 0 ? (
                 <div className="empty-state">{isLoadingMessages[activeSessionId] ? 'Loading messages...' : 'No messages in this chat yet.'}</div>
               ) : (
-                activeMessages.map((message) => (
-                  <div key={message.id} className={`message-row ${message.sender}`}>
-                    <div className="message-bubble">
-                      <span className="role">{message.sender === 'user' ? 'You' : 'AI'}</span>
-                      <div className="message-content">
-                        {formatMessageText(message.text)}
+                activeMessages.map((message) => {
+                  const showUninformedAction =
+                    message.sender === 'bot' &&
+                    message.isInformed === false &&
+                    recentUninformedAction.sessionId === activeSessionId &&
+                    recentUninformedAction.messageId === message.id
+
+                  return (
+                    <div key={message.id} className={`message-row ${message.sender}`}>
+                      <div className="message-bubble">
+                        <span className="role">{message.sender === 'user' ? 'You' : 'AI'}</span>
+                        <div className="message-content">
+                          {formatMessageText(message.text)}
+                        </div>
+
+                        {showUninformedAction && (
+                          <button
+                            type="button"
+                            className="uninformed-action-btn"
+                            onClick={() => handleWebSearchAndAnswer(message)}
+                          >
+                            Do web search and answer
+                          </button>
+                        )}
+
+                        <small>{message.time}</small>
                       </div>
-                      <small>{message.time}</small>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
 
               {isAiThinking && (

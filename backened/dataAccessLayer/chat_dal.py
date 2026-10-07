@@ -1,3 +1,4 @@
+from email.mime import message
 import logging
 from bson.dbref import DBRef
 from models.Models import ChatSession, ChatMessage, ChatRoles
@@ -6,7 +7,7 @@ from uuid import UUID
 from core.exceptions import EntityDoesNotExist
 from typing import List
 from datetime import datetime
-from beanie import PydanticObjectId
+from beanie import Link, PydanticObjectId
 
 logger = logging.getLogger(__name__)
 
@@ -99,14 +100,14 @@ class ChatSessionOdmLayer:
 class ChatMessageOdmLayer:
 
     @classmethod
-    async def create_message(cls, session_id: str, role: ChatRoles, message_text: str)->ChatMessage:         
+    async def create_message(cls, session_id: str, role: ChatRoles, message_text: str, is_informed: bool)->ChatMessage:         
         chat_session = await ChatSession.find_one({"_id": UUID(hex=session_id)})
 
         if not chat_session:  
             raise EntityDoesNotExist(f"session: {session_id} does not exist.")
 
         try:
-            chat_message = ChatMessage(sessionId=chat_session, role=role, messageText=message_text)
+            chat_message = ChatMessage(sessionId=chat_session, role=role, messageText=message_text, is_informed=is_informed)
             await chat_message.save()
         except Exception: 
             logger.exception("Something happened while saving message to the db.")
@@ -171,3 +172,34 @@ class ChatMessageOdmLayer:
         except Exception: 
             logger.exception("Something happened while updating the message summary.")
             raise 
+
+    @classmethod
+    async def query_single_message(    cls, 
+                                session_id: str, 
+                                message_id: str,   
+                                ) -> ChatMessage:
+        return await ChatMessage.find_one({
+                                            "_id": PydanticObjectId(message_id),
+                                            "sessionId._id": UUID(hex=session_id)
+                                        }, fetch_links=True)
+
+
+    @classmethod
+    async def update_message(cls, message_id: str,message_text: str = None, isSummarized: bool = None, web_response: str = None, is_informed: bool = None) -> ChatMessage:
+        input_dict = {}
+
+        if message_text is not None: 
+            input_dict["messageText"] = message_text
+
+        if isSummarized is not None:
+            input_dict["isSummarized"] = isSummarized
+
+        if web_response is not None:
+            input_dict["web_response"] = web_response
+
+        if is_informed is not None:
+            input_dict["is_informed"] = is_informed
+        
+        obj = await ChatMessage.find_one(ChatMessage.id == PydanticObjectId(message_id)).update({"$set": input_dict})
+
+        return obj

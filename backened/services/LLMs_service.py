@@ -47,7 +47,7 @@ class GeminiLLM:
         if not userQuestion: 
             return "??"
          
-        systemMessageStr = """ You are a helpful assistant of a huam. Use the following pieces of context to answer the human's question.If no context is available, just say that you don't know—do not try to make up an answer.Please give stuctured answers with new line tags so that can be rendered properly.\n Provided context is:\n' {context} '"""
+        systemMessageStr = """ You are a helpful assistant of a human. Use the following pieces of context to answer the human's question.If no context is available, strictly reply that you don't know, do not try to answer from your knowledge base. Please give stuctured answers with new line tags so that can be rendered properly.\n Provided context is:\n' {context} '"""
 
         systemMessage = ("system", systemMessageStr)
         message_inputs = {"context": context}
@@ -68,7 +68,6 @@ class GeminiLLM:
         # current question of the user    
         messages.append(("human", userQuestion))    
         prompt = ChatPromptTemplate.from_messages(messages)
-
         try: 
             res =  await prompt.ainvoke(message_inputs)
         except Exception as e: 

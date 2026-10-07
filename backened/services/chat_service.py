@@ -114,11 +114,12 @@ class ChatSessionService:
 class ChatMessageService: 
 
     @classmethod
-    async def create_messasge(cls, session_id: str, role: str, message_text: str) -> Dict: 
+    async def create_messasge(cls, session_id: str, role: str, message_text: str, is_informed: bool = False) -> Dict: 
         """
             session_id(str): session to which message belongs
             role(str): either "ai" or "human"
             message_text(str): text
+            is_informed(bool): whether the message is informed
         """
 
         if role not in ["ai", "human"]:
@@ -127,18 +128,20 @@ class ChatMessageService:
         if not message_text: 
             raise ValueError("Message can not be empty")
 
-        message = await ChatMessageOdmLayer.create_message(session_id=session_id, role=role, message_text=message_text)
+        message = await ChatMessageOdmLayer.create_message(session_id=session_id, role=role, message_text=message_text, is_informed=is_informed)
 
         # session_detail = message.sessionId.to_dict()
         # from_db_session_id = session_detail.get("id") 
         from_db_session_id =  message.sessionId.id 
         message_dict = {
+            "message_id": str(message.id),
             "session_id": from_db_session_id, 
             "role": message.role, 
             "message": message.messageText, 
             "is_summarized": message.isSummarized, 
             "created_at": str(message.created_at),
-            "updated_at": str(message.updated_at)
+            "updated_at": str(message.updated_at), 
+            "is_informed": message.is_informed,
         }
 
         return message_dict
@@ -194,7 +197,8 @@ class ChatMessageService:
                 "message": message.messageText, 
                 "is_summarized": message.isSummarized, 
                 "created_at": str(message.created_at),
-                "updated_at": str(message.updated_at)
+                "updated_at": str(message.updated_at),
+                "is_informed": message.is_informed,
             }
 
             res.append(message_dict)
@@ -233,17 +237,52 @@ class ChatMessageService:
             logger.exception(f"Something happened while summarizing the messages for the session_id: {session_id}")    
         
 
+    @staticmethod
+    async def get_message_details(session_id: str, message_id: str, user_id: str) -> Dict: 
+        chat_session = await ChatSessionOdmLayer.get_chat_session(session_id)
+        user_detail = chat_session.userId.to_dict()
+        from_db_user_id = user_detail.get("id")
+
+        if from_db_user_id != user_id:
+            raise UnAuthorizedAccess("You don't have permission to access it.")
+        message = await ChatMessageOdmLayer.query_single_message(session_id=session_id, message_id=message_id)
+
+        if message: 
+            return {
+                    "id": str(message.id), 
+                    "session_id": str(message.sessionId.id), 
+                    "role": message.role, 
+                    "message": message.messageText, 
+                    "is_summarized": message.isSummarized, 
+                    "created_at": str(message.created_at),
+                    "updated_at": str(message.updated_at),
+                    "is_informed": message.is_informed,
+                } 
+        raise EntityDoesNotExist(f"Message with id: {message_id} does not exist in the session: {session_id}.")
 
 
+    @staticmethod
+    async def update_message_details(session_id: str, message_id: str, user_id: str, message_text: str, is_informed: bool = None) -> Dict: 
+        chat_session = await ChatSessionOdmLayer.get_chat_session(session_id)
+        user_detail = chat_session.userId.to_dict()
+        from_db_user_id = user_detail.get("id")
 
-
-
-
-
-
-        # "session_id": from_db_session_id, 
-        #                 "role": message.role, 
-        #                 "message": message.messageText, 
-        #                 "is_summarized": message.isSummarized, 
-        #                 "created_at": str(message.created_at),
-        #                 "updated_at": str(message.updated_at)
+        if from_db_user_id != user_id:
+            raise UnAuthorizedAccess("You don't have permission to access it.")
+        
+        await ChatMessageOdmLayer.update_message(message_id=message_id, message_text=message_text, is_informed=is_informed)
+        
+        message = await ChatMessageOdmLayer.query_single_message(session_id=session_id, message_id=message_id)
+        
+        if message: 
+            return {
+                   
+                    "session_id": str(message.sessionId.id), 
+                    "role": message.role, 
+                    "message": message.messageText, 
+                    "is_summarized": message.isSummarized, 
+                    "created_at": str(message.created_at),
+                    "updated_at": str(message.updated_at),
+                    "is_informed": message.is_informed,
+                } 
+        raise EntityDoesNotExist(f"Message with id: {message_id} does not exist in the session: {session_id}.")

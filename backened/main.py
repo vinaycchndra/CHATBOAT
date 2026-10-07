@@ -6,10 +6,8 @@ from api.v1.endpoints.chat_message_endpoints import chat_message_router
 from api.v1.endpoints.file_endpoints import file_handling_router
 from dotenv import load_dotenv
 from db.mongodb import initDb
-# from services.EmbeddingService import VectorEmbeddingService
 from fastapi.middleware.cors import CORSMiddleware
-
-
+from agent.agents.web_search_agent import WebSearchAgent
 app = FastAPI()
 
 app.add_middleware(
@@ -19,6 +17,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
 app.include_router(user_router)
 app.include_router(chat_session_router)
 app.include_router(chat_message_router)
@@ -28,7 +27,11 @@ app.include_router(file_handling_router)
 async def startup_event():
     # await VectorEmbeddingService.createEmbeddingForFile(fileType="application/pdf", filePath="/home/vishal/Desktop/ChatBoat/data/Medical_book.pdf", userId="6a82b8324124d6a72005d3e2", documentId="my_document")
     load_dotenv()
+    
     await initDb()
+    
+    # initializing the web search agent
+    WebSearchAgent.get_instance()
         
     
 
