@@ -199,6 +199,7 @@ class ChatMessageService:
                 "created_at": str(message.created_at),
                 "updated_at": str(message.updated_at),
                 "is_informed": message.is_informed,
+                "web_response": message.web_response
             }
 
             res.append(message_dict)
@@ -262,7 +263,7 @@ class ChatMessageService:
 
 
     @staticmethod
-    async def update_message_details(session_id: str, message_id: str, user_id: str, message_text: str, is_informed: bool = None) -> Dict: 
+    async def update_message_details(session_id: str, message_id: str, user_id: str, message_text: str = None, is_informed: bool = None, web_response: str = None) -> Dict: 
         chat_session = await ChatSessionOdmLayer.get_chat_session(session_id)
         user_detail = chat_session.userId.to_dict()
         from_db_user_id = user_detail.get("id")
@@ -270,7 +271,7 @@ class ChatMessageService:
         if from_db_user_id != user_id:
             raise UnAuthorizedAccess("You don't have permission to access it.")
         
-        await ChatMessageOdmLayer.update_message(message_id=message_id, message_text=message_text, is_informed=is_informed)
+        await ChatMessageOdmLayer.update_message(message_id=message_id, message_text=message_text, is_informed=is_informed, web_response=web_response)
         
         message = await ChatMessageOdmLayer.query_single_message(session_id=session_id, message_id=message_id)
         
@@ -284,5 +285,6 @@ class ChatMessageService:
                     "created_at": str(message.created_at),
                     "updated_at": str(message.updated_at),
                     "is_informed": message.is_informed,
+                    "web_response": message.web_response
                 } 
         raise EntityDoesNotExist(f"Message with id: {message_id} does not exist in the session: {session_id}.")

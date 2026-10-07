@@ -125,7 +125,7 @@ async def update_message_from_web_search_agent(request: Request, session_id: str
     
     # updating the message text or the fields
     try:
-        updated_message = await ChatMessageService.update_message_details(session_id = session_id, message_id = ai_message_id, user_id = user_id,  message_text = web_search_response, is_informed = True)
+        updated_message = await ChatMessageService.update_message_details(session_id = session_id, message_id = ai_message_id, user_id = user_id,  web_response = web_search_response, is_informed = True)
     except Exception as e: 
         return JSONResponse(status_code=400, content={"message": "Something happened while updating the AI message with the web search response."})
     

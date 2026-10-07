@@ -188,7 +188,7 @@ class ChatMessageOdmLayer:
     async def update_message(cls, message_id: str,message_text: str = None, isSummarized: bool = None, web_response: str = None, is_informed: bool = None) -> ChatMessage:
         input_dict = {}
 
-        if message_text is not None: 
+        if message_text: 
             input_dict["messageText"] = message_text
 
         if isSummarized is not None:
