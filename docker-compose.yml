@@ -1,22 +1,7 @@
-version: "3.8"
-
 services:
-  # chroma:
-  #   image: ghcr.io/chroma-core/chroma:latest
-  #   user: root
-  #   environment:
-  #     - IS_PERSISTENT=TRUE
-  #     - PERSIST_DIRECTORY=/chroma/chroma
-  #     - ALLOW_RESET=TRUE
-  #   volumes:
-  #     - index_data:/chroma/chroma
-  #   ports:
-  #     - "8000:8000"
-  #   networks:
-  #     - net
   backend:
     build:
-      context: ./backened       # Folder where backend Dockerfile lives
+      context: ./backened
       dockerfile: Dockerfile
     ports:
       - "8001:8000"
@@ -26,29 +11,30 @@ services:
       - net
     volumes:
       - ./backened/upload_folder:/app/upload_folder
-    
+    restart: always
 
   qdrant:
     image: qdrant/qdrant:latest
     restart: always
     container_name: qdrant
     ports:
-      - 6333:6333
-      - 6334:6334
+      - "6333:6333"
+      - "6334:6334"
     networks:
       - net
     expose:
-      - 6333
-      - 6334
-      - 6335
+      - "6333"
+      - "6334"
+      - "6335"
     configs:
       - source: qdrant_config
         target: /qdrant/config/production.yaml
     volumes:
-      - ./qdrant_data:/qdrant/storage
+      - qdrant_data:/qdrant/storage
 
   mongodb:
     image: mongodb/mongodb-community-server:latest
+    container_name: mongodb
     environment:
       - MONGO_INITDB_ROOT_USERNAME=admin
       - MONGO_INITDB_ROOT_PASSWORD=admin
@@ -57,12 +43,15 @@ services:
     networks:
       - net
     volumes:
-      - type: bind 
-        source: ./data
-        target: /data/db
+      - mongo_data:/data/db
+    restart: always
 
 volumes:
   index_data:
+    driver: local
+  mongo_data:
+    driver: local
+  qdrant_data:
     driver: local
 
 networks:
@@ -73,3 +62,144 @@ configs:
   qdrant_config:
     content: |
       log_level: INFO
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# version: "3.8"
+
+# services:
+#   # chroma:
+#   #   image: ghcr.io/chroma-core/chroma:latest
+#   #   user: root
+#   #   environment:
+#   #     - IS_PERSISTENT=TRUE
+#   #     - PERSIST_DIRECTORY=/chroma/chroma
+#   #     - ALLOW_RESET=TRUE
+#   #   volumes:
+#   #     - index_data:/chroma/chroma
+#   #   ports:
+#   #     - "8000:8000"
+#   #   networks:
+#   #     - net
+#   backend:
+#     build:
+#       context: ./backened       # Folder where backend Dockerfile lives
+#       dockerfile: Dockerfile
+#     ports:
+#       - "8001:8000"
+#     env_file:
+#       - ./backened/.env
+#     networks:
+#       - net
+#     volumes:
+#       - ./backened/upload_folder:/app/upload_folder
+    
+
+#   qdrant:
+#     image: qdrant/qdrant:latest
+#     restart: always
+#     container_name: qdrant
+#     ports:
+#       - 6333:6333
+#       - 6334:6334
+#     networks:
+#       - net
+#     expose:
+#       - 6333
+#       - 6334
+#       - 6335
+#     configs:
+#       - source: qdrant_config
+#         target: /qdrant/config/production.yaml
+#     volumes:
+#       - ./qdrant_data:/qdrant/storage
+
+#   mongodb:
+#     image: mongodb/mongodb-community-server:latest
+#     environment:
+#       - MONGO_INITDB_ROOT_USERNAME=admin
+#       - MONGO_INITDB_ROOT_PASSWORD=admin
+#     ports:
+#       - "27017:27017"
+#     networks:
+#       - net
+#     volumes:
+#       - type: bind 
+#         source: ./data
+#         target: /data/db
+
+# volumes:
+#   index_data:
+#     driver: local
+
+# networks:
+#   net:
+#     driver: bridge
+
+# configs:
+#   qdrant_config:
+#     content: |
+#       log_level: INFO
