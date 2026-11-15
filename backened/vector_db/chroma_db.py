@@ -85,7 +85,7 @@ class QuadrantVectorDB(VectorDBAbstract):
     @classmethod
     async def getVectorDb(cls) -> VectorDBAbstract: 
         if cls._instance is None:
-            client = AsyncQdrantClient(host=VECTOR_DB_HOST, port=int(VECTOR_DB_PORT)) 
+            client = AsyncQdrantClient(host=VECTOR_DB_HOST, port=int(VECTOR_DB_PORT), check_compatibility=False) 
             collection_exists = await client.collection_exists(collection_name=VECTOR_DB_COLLECTION)
             if not collection_exists:
                 await client.create_collection(
