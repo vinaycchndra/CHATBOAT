@@ -1,0 +1,7 @@
+.venv
+qdrant_data
+data
+.env
+__pycache__
+*/__pycache__
+./upload_folder
